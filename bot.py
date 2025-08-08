@@ -1,7 +1,7 @@
 import logging
 import os
+from urllib.parse import urlparse, urlunparse
 from telegram import Update
-from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 # Configura o logging para vermos erros no console
