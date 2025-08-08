@@ -65,13 +65,19 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 parsed_link = urlparse(link_original)
                 domain_original = parsed_link.netloc.replace('www.', '')
 
-                # 1. Checa se o domínio está na lista de PAYWALL
-                if domain_original in PAYWALL_DOMAINS:
-                    url_codificada = quote(link_original)
-                    link_modificado = f"https://www.removepaywall.com/search?url={url_codificada}"
-                    
-                    texto_modificado = texto_modificado.replace(link_original, link_modificado)
-                    links_alterados = True
+                # 1. Checa se o domínio termina com um dos domínios da lista de PAYWALL
+                paywall_match_found = False
+                for paywall_domain in PAYWALL_DOMAINS:
+                    if domain_original.endswith(paywall_domain):
+                        url_codificada = quote(link_original)
+                        link_modificado = f"https://www.removepaywall.com/search?url={url_codificada}"
+                        
+                        texto_modificado = texto_modificado.replace(link_original, link_modificado)
+                        links_alterados = True
+                        paywall_match_found = True
+                        break # Encontrou uma regra, sai do loop de paywall
+
+                if paywall_match_found:
                     continue # Pula para o próximo link, pois este já foi tratado
 
                 # 2. Se não for paywall, checa as regras de redes sociais
