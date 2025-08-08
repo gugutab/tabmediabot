@@ -1,6 +1,6 @@
 import logging
 import os
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, quote
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
@@ -13,6 +13,23 @@ logger = logging.getLogger(__name__)
 
 # --- ID do chat permitido ---
 MEU_CHAT_ID = 476169897 
+
+# --- Lista de domínios com paywall ---
+PAYWALL_DOMAINS = {
+    'bloomberg.com', 'correio.rac.com.br', 'nsctotal.com.br', 'economist.com', 
+    'estadao.com.br', 'foreignpolicy.com', 'folha.uol.com.br', 'folha.com.br', 
+    'gauchazh.clicrbs.com.br', 'zh.clicrbs.com.br', 'gazetadopovo.com.br', 
+    'jota.info', 'jornalnh.com.br', 'nytimes.com', 'nyt.com', 'oglobo.globo.com', 
+    'washingtonpost.com', 'exame.com', 'eltiempo.com', 'super.abril.com.br', 
+    'veja.abril.com.br', 'quatrorodas.abril.com.br', 'uol.com.br', 'wsj.com', 
+    'ft.com', 'gramophone.co.uk', 'folhadelondrina.com.br', 'wired.com', 
+    'jornalvs.com.br', 'br18.com.br', 'diariopopular.com.br', 'haaretz.com', 
+    'haaretz.co.il', 'diarinho.com.br', 'diariodaregiao.com.br', 
+    'correio24horas.com.br', 'dgabc.com.br', 'crusoe.com.br', 'em.com.br', 
+    'forbes.pl', 'forbes.com', 'newsweek.pl', 'seudinheiro.com', 
+    'diariodecanoas.com.br', 'observador.pt', 'elpais.com', 'correiodopovo.com.br', 
+    'technologyreview.com', 'revistagalileu.globo.com'
+}
 
 # --- A LÓGICA DO SEU BOT COMEÇA AQUI ---
 
@@ -31,8 +48,8 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     texto_modificado = texto_original
     links_alterados = False
 
-    # Mapeamento dos domínios antigos para os novos
-    REGRAS_DE_SUBSTITUICAO = {
+    # Mapeamento dos domínios de redes sociais
+    REGRAS_SOCIAL = {
         'fixupx.com': ['twitter.com', 'x.com'],
         'fixtiktok.com': ['tiktok.com', 'vm.tiktok.com'],
         'ddinstagram.com': ['instagram.com'],
@@ -48,17 +65,24 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 parsed_link = urlparse(link_original)
                 domain_original = parsed_link.netloc.replace('www.', '')
 
-                # Verifica se o domínio está em alguma das nossas regras
-                for novo_domain, dominios_antigos in REGRAS_DE_SUBSTITUICAO.items():
+                # 1. Checa se o domínio está na lista de PAYWALL
+                if domain_original in PAYWALL_DOMAINS:
+                    url_codificada = quote(link_original)
+                    link_modificado = f"https://www.removepaywall.com/search?url={url_codificada}"
+                    
+                    texto_modificado = texto_modificado.replace(link_original, link_modificado)
+                    links_alterados = True
+                    continue # Pula para o próximo link, pois este já foi tratado
+
+                # 2. Se não for paywall, checa as regras de redes sociais
+                for novo_domain, dominios_antigos in REGRAS_SOCIAL.items():
                     if domain_original in dominios_antigos:
-                        # Remonta o link com o novo domínio, mantendo o resto da URL
                         partes_do_link = parsed_link._replace(netloc=novo_domain)
                         link_modificado = urlunparse(partes_do_link)
                         
-                        # Substitui o link antigo pelo novo no texto completo da mensagem
                         texto_modificado = texto_modificado.replace(link_original, link_modificado)
                         links_alterados = True
-                        break # Pula para a próxima entidade/link
+                        break # Pula para o próximo link
 
             except Exception as e:
                 logger.error(f"Erro ao processar o link {link_original}: {e}")
