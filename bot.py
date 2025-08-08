@@ -12,47 +12,63 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 MEU_CHAT_ID = 476169897 
-
 # --- A LÓGICA DO SEU BOT COMEÇA AQUI ---
 
 async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Processa todas as mensagens de texto em busca de links específicos."""
     message = update.message
+
     # --- FILTRO DE CHAT ID ---
     if message.chat_id != MEU_CHAT_ID:
         return # Ignora a mensagem se não for do chat permitido
         
-    if not message or not message.text:
+    if not message or not message.text or not message.entities:
         return
 
     texto_original = message.text
     texto_modificado = texto_original
     links_alterados = False
 
-    # Verifica se a mensagem contém links (URLs)
-    if message.entities:
-        for entity in message.entities:
-            if entity.type == 'url':
-                link_original = texto_original[entity.offset : entity.offset + entity.length]
+    # Mapeamento dos domínios antigos para os novos
+    REGRAS_DE_SUBSTITUICAO = {
+        'fixupx.com': ['twitter.com', 'x.com'],
+        'fixtiktok.com': ['tiktok.com', 'vm.tiktok.com'],
+        'ddinstagram.com': ['instagram.com']
+    }
 
-                # --- Defina suas regras de substituição aqui ---
-                if 'twitter.com' in link_original:
-                    link_modificado = link_original.replace('twitter.com', 'x.com')
-                    texto_modificado = texto_modificado.replace(link_original, link_modificado)
-                    links_alterados = True
-                elif 'seu-outro-site.com' in link_original:
-                    # Adicione outras regras aqui se precisar
-                    pass
+    for entity in message.entities:
+        if entity.type == 'url':
+            link_original = texto_original[entity.offset : entity.offset + entity.length]
+            
+            try:
+                # Analisa o link para extrair o domínio de forma segura
+                parsed_link = urlparse(link_original)
+                domain_original = parsed_link.netloc.replace('www.', '')
+
+                # Verifica se o domínio está em alguma das nossas regras
+                for novo_domain, dominios_antigos in REGRAS_DE_SUBSTITUICAO.items():
+                    if domain_original in dominios_antigos:
+                        # Remonta o link com o novo domínio, mantendo o resto da URL
+                        partes_do_link = parsed_link._replace(netloc=novo_domain)
+                        link_modificado = urlunparse(partes_do_link)
+                        
+                        # Substitui o link antigo pelo novo no texto completo da mensagem
+                        texto_modificado = texto_modificado.replace(link_original, link_modificado)
+                        links_alterados = True
+                        break # Pula para a próxima entidade/link
+
+            except Exception as e:
+                logger.error(f"Erro ao processar o link {link_original}: {e}")
+                continue
 
     if links_alterados:
-        logger.info(f"Link alterado para o usuário {message.from_user.name}")
+        logger.info(f"Link(s) alterado(s) para o usuário {message.from_user.name}")
         # Responde à mensagem original com o texto modificado
         await message.reply_text(texto_modificado, disable_web_page_preview=False)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia uma mensagem de boas-vindas quando o comando /start é executado."""
-    await update.message.reply_text('Olá! Envie uma mensagem com um link do Twitter e eu vou corrigi-lo para você.')
-
+    await update.message.reply_text('Olá! Envie uma mensagem com um link do Twitter, Instagram ou TikTok e eu vou corrigi-lo para você.')
 
 async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia o ID do chat atual."""
