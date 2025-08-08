@@ -2,6 +2,7 @@ import logging
 import os
 from urllib.parse import urlparse, urlunparse, quote
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 # Configura o logging para vermos erros no console
@@ -47,6 +48,7 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     texto_original = message.text
     texto_modificado = texto_original
     links_alterados = False
+    contem_paywall = False # Flag para controlar o formato da resposta
 
     # Mapeamento dos domínios de redes sociais
     REGRAS_SOCIAL = {
@@ -69,8 +71,12 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 paywall_match_found = False
                 for paywall_domain in PAYWALL_DOMAINS:
                     if domain_original.endswith(paywall_domain):
-                        url_codificada = quote(link_original)
-                        link_modificado = f"https://www.removepaywall.com/search?url={url_codificada}"
+                        contem_paywall = True # Ativa a flag de paywall
+                        url_removepaywall = f"https://www.removepaywall.com/search?url={quote(link_original)}"
+                        
+                        # Cria o hiperlink em formato HTML
+                        texto_do_link = "🖕Vá se foder, paywall!🖕"
+                        link_modificado = f'<a href="{url_removepaywall}">{texto_do_link}</a>'
                         
                         texto_modificado = texto_modificado.replace(link_original, link_modificado)
                         links_alterados = True
@@ -96,8 +102,19 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     if links_alterados:
         logger.info(f"Link(s) alterado(s) para o usuário {message.from_user.name}")
-        # Responde à mensagem original com o texto modificado
-        await message.reply_text(texto_modificado, disable_web_page_preview=False)
+        
+        # Responde de forma diferente se for um link de paywall
+        if contem_paywall:
+            await message.reply_text(
+                texto_modificado, 
+                parse_mode=ParseMode.HTML, 
+                disable_web_page_preview=True
+            )
+        else:
+            await message.reply_text(
+                texto_modificado, 
+                disable_web_page_preview=False
+            )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia uma mensagem de boas-vindas quando o comando /start é executado."""
