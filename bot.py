@@ -48,6 +48,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text('Olá! Envie uma mensagem com um link do Twitter e eu vou corrigi-lo para você.')
 
 
+async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Envia o ID do chat atual."""
+    chat_id = update.message.chat_id
+    await update.message.reply_text(f"O ID deste chat é: {chat_id}")
+
 def main() -> None:
     """Inicia o bot e fica escutando por mensagens."""
     # Pega o token de uma variável de ambiente para segurança
@@ -60,6 +65,7 @@ def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
     # Adiciona os handlers (manipuladores)
+    application.add_handler(CommandHandler("myid", get_chat_id))
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, processa_mensagem))
 
