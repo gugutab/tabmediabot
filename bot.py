@@ -11,7 +11,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# --- ID do chat permitido ---
 MEU_CHAT_ID = 476169897 
+
 # --- A LÓGICA DO SEU BOT COMEÇA AQUI ---
 
 async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -33,7 +35,8 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     REGRAS_DE_SUBSTITUICAO = {
         'fixupx.com': ['twitter.com', 'x.com'],
         'fixtiktok.com': ['tiktok.com', 'vm.tiktok.com'],
-        'ddinstagram.com': ['instagram.com']
+        'ddinstagram.com': ['instagram.com'],
+        'fxbsky.app': ['bsky.app']
     }
 
     for entity in message.entities:
