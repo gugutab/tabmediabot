@@ -11,11 +11,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+MEU_CHAT_ID = 476169897 
+
 # --- A LÓGICA DO SEU BOT COMEÇA AQUI ---
 
 async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Processa todas as mensagens de texto em busca de links específicos."""
     message = update.message
+    # --- FILTRO DE CHAT ID ---
+    if message.chat_id != MEU_CHAT_ID:
+        return # Ignora a mensagem se não for do chat permitido
+        
     if not message or not message.text:
         return
 
