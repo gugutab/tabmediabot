@@ -27,7 +27,7 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if message.entities:
         for entity in message.entities:
             if entity.type == 'url':
-                link_original = entity.get_text(texto_original)
+                link_original = texto_original[entity.offset : entity.offset + entity.length]
 
                 # --- Defina suas regras de substituição aqui ---
                 if 'twitter.com' in link_original:
