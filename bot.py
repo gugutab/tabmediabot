@@ -32,61 +32,54 @@ PAYWALL_DOMAINS = {
     'technologyreview.com', 'revistagalileu.globo.com'
 }
 
-# --- A LÓGICA DO SEU BOT COMEÇA AQUI ---
+# Mapeamento dos domínios de redes sociais
+REGRAS_SOCIAL = {
+    'fixupx.com': ['twitter.com', 'x.com'],
+    'fixtiktok.com': ['tiktok.com', 'vm.tiktok.com'],
+    'ddinstagram.com': ['instagram.com'],
+    'fxbsky.app': ['bsky.app']
+}
 
-async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Processa todas as mensagens de texto em busca de links específicos."""
-    message = update.message
+# --- FUNÇÃO CENTRAL DE LÓGICA ---
 
-    # --- FILTRO DE CHAT ID ---
-    if message.chat_id != MEU_CHAT_ID:
-        return # Ignora a mensagem se não for do chat permitido
-        
-    if not message or not message.text or not message.entities:
-        return
+def corrigir_links(texto_original, entities):
+    """
+    Função central que processa uma lista de links e retorna o texto modificado.
+    Retorna uma tupla: (texto_modificado, links_alterados, contem_paywall)
+    """
+    if not texto_original or not entities:
+        return texto_original, False, False
 
-    texto_original = message.text
     texto_modificado = texto_original
     links_alterados = False
-    contem_paywall = False # Flag para controlar o formato da resposta
+    contem_paywall = False
 
-    # Mapeamento dos domínios de redes sociais
-    REGRAS_SOCIAL = {
-        'fixupx.com': ['twitter.com', 'x.com'],
-        'fixtiktok.com': ['tiktok.com', 'vm.tiktok.com'],
-        'ddinstagram.com': ['instagram.com'],
-        'fxbsky.app': ['bsky.app']
-    }
-
-    for entity in message.entities:
+    for entity in entities:
         if entity.type == 'url':
             link_original = texto_original[entity.offset : entity.offset + entity.length]
             
             try:
-                # Analisa o link para extrair o domínio de forma segura
                 parsed_link = urlparse(link_original)
                 domain_original = parsed_link.netloc.replace('www.', '')
 
-                # 1. Checa se o domínio termina com um dos domínios da lista de PAYWALL
+                # 1. Checa Paywall
                 paywall_match_found = False
                 for paywall_domain in PAYWALL_DOMAINS:
                     if domain_original.endswith(paywall_domain):
-                        contem_paywall = True # Ativa a flag de paywall
+                        contem_paywall = True
                         url_removepaywall = f"https://www.removepaywall.com/search?url={quote(link_original)}"
-                        
-                        # Cria o hiperlink em formato HTML
                         texto_do_link = "🖕Vá se foder, paywall!🖕"
                         link_modificado = f'<a href="{url_removepaywall}">{texto_do_link}</a>'
                         
                         texto_modificado = texto_modificado.replace(link_original, link_modificado)
                         links_alterados = True
                         paywall_match_found = True
-                        break # Encontrou uma regra, sai do loop de paywall
-
+                        break
+                
                 if paywall_match_found:
-                    continue # Pula para o próximo link, pois este já foi tratado
+                    continue
 
-                # 2. Se não for paywall, checa as regras de redes sociais
+                # 2. Checa Redes Sociais
                 for novo_domain, dominios_antigos in REGRAS_SOCIAL.items():
                     if domain_original in dominios_antigos:
                         partes_do_link = parsed_link._replace(netloc=novo_domain)
@@ -94,55 +87,90 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                         
                         texto_modificado = texto_modificado.replace(link_original, link_modificado)
                         links_alterados = True
-                        break # Pula para o próximo link
-
+                        break
+            
             except Exception as e:
                 logger.error(f"Erro ao processar o link {link_original}: {e}")
                 continue
 
+    return texto_modificado, links_alterados, contem_paywall
+
+
+# --- HANDLERS DE COMANDOS E MENSAGENS ---
+
+async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Processa automaticamente as mensagens de texto em busca de links."""
+    message = update.message
+    if message.chat_id != MEU_CHAT_ID:
+        return
+
+    texto_modificado, links_alterados, contem_paywall = corrigir_links(message.text, message.entities)
+
     if links_alterados:
-        logger.info(f"Link(s) alterado(s) para o usuário {message.from_user.name}")
-        
-        # Responde de forma diferente se for um link de paywall
+        logger.info(f"Link(s) alterado(s) automaticamente para o usuário {message.from_user.name}")
         if contem_paywall:
-            await message.reply_text(
-                texto_modificado, 
-                parse_mode=ParseMode.HTML, 
-                disable_web_page_preview=True
-            )
+            await message.reply_text(texto_modificado, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
         else:
-            await message.reply_text(
-                texto_modificado, 
-                disable_web_page_preview=False
-            )
+            await message.reply_text(texto_modificado, disable_web_page_preview=False)
+
+async def processa_paywall_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Processa o comando /paywall respondido a uma mensagem."""
+    message = update.message
+    original_message = message.reply_to_message
+
+    if not original_message:
+        return # Comando não foi usado em resposta a uma mensagem
+
+    if not original_message.text or not original_message.entities:
+        await message.reply_text("Que foi, porra?!")
+        return
+
+    texto_modificado, links_alterados, contem_paywall = corrigir_links(original_message.text, original_message.entities)
+
+    if links_alterados:
+        logger.info(f"Link(s) alterado(s) via /paywall por {message.from_user.name}")
+        # Responde à mensagem original para manter o contexto
+        if contem_paywall:
+            await original_message.reply_text(texto_modificado, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+        else:
+            # Se não for paywall, apenas envia o link modificado (caso raro)
+            await original_message.reply_text(texto_modificado, disable_web_page_preview=False)
+    else:
+        # Se nenhum link foi alterado, informa o usuário
+        await message.reply_text("Nenhum link de paywall conhecido encontrado na mensagem original.")
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia uma mensagem de boas-vindas quando o comando /start é executado."""
-    await update.message.reply_text('Olá! Envie uma mensagem com um link do Twitter, Instagram ou TikTok e eu vou corrigi-lo para você.')
+    await update.message.reply_text('Olá! Envie uma mensagem com um link e eu vou corrigi-lo para você.')
 
 async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia o ID do chat atual."""
     chat_id = update.message.chat_id
     await update.message.reply_text(f"O ID deste chat é: {chat_id}")
 
+async def acende_placeholder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Placeholder para o comando /acende."""
+    await update.message.reply_text("Comando /acende recebido. Funcionalidade a ser implementada no futuro.")
+
+
 def main() -> None:
     """Inicia o bot e fica escutando por mensagens."""
-    # Pega o token de uma variável de ambiente para segurança
     TOKEN = os.getenv('TOKEN_TELEGRAM')
     if not TOKEN:
         logger.error("A variável de ambiente TOKEN_TELEGRAM não foi definida!")
         return
 
-    # Cria a aplicação do bot
     application = Application.builder().token(TOKEN).build()
 
     # Adiciona os handlers (manipuladores)
-    application.add_handler(CommandHandler("myid", get_chat_id))
     application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("myid", get_chat_id))
+    application.add_handler(CommandHandler("paywall", processa_paywall_reply))
+    application.add_handler(CommandHandler("acende", acende_placeholder))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, processa_mensagem))
 
     logger.info("Bot iniciado e escutando...")
-    # Inicia o bot
     application.run_polling()
 
 if __name__ == '__main__':
