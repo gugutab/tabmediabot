@@ -23,7 +23,7 @@ WHITELIST_CHAT_IDS = {
     -1001341232703, //fckb
     -478465074, //amigos
     -4239106683, //viver
-    -1001789970582, grupão
+    -1001789970582, //grupão
     # -100123456789, # Exemplo de ID de um grupo
 }
 
