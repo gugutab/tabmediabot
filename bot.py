@@ -1,5 +1,8 @@
 import logging
 import os
+import random
+import asyncio
+from datetime import datetime, timedelta
 from urllib.parse import urlparse, urlunparse, quote
 from telegram import Update
 from telegram.constants import ParseMode
@@ -39,6 +42,11 @@ REGRAS_SOCIAL = {
     'ddinstagram.com': ['instagram.com'],
     'fxbsky.app': ['bsky.app']
 }
+
+# --- Variáveis para o Cooldown do /acende ---
+_last_acende_time = datetime.min
+_acende_cooldown = timedelta(seconds=30)
+
 
 # --- FUNÇÃO CENTRAL DE LÓGICA ---
 
@@ -154,6 +162,114 @@ async def comando_paywall(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await message.reply_text("Cade o link, porra!?")
 
 
+async def comando_acende(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Implementa a lógica do 'rojão' com cooldown e variações aleatórias."""
+    global _last_acende_time, _acende_cooldown
+    message = update.message
+
+    # Checa se é domingo (domingo = 6 na biblioteca datetime do Python)
+    if datetime.now().weekday() == 6:
+        await message.reply_text("Abaixo a escala 6x1!!!")
+        return
+
+    # Checa o cooldown
+    time_since_last_use = datetime.utcnow() - _last_acende_time
+    if time_since_last_use < _acende_cooldown:
+        await message.reply_text("Calma porra!")
+        return
+
+    # Atualiza o tempo do último uso
+    _last_acende_time = datetime.utcnow()
+
+    # Define as sequências de mensagens (blocos)
+    async def bloco1():
+        await message.reply_text("pra pra")
+        await asyncio.sleep(0.2)
+        await message.reply_text("pra")
+        await asyncio.sleep(0.1)
+        await message.reply_text("pra")
+        await asyncio.sleep(0.1)
+        await message.reply_text("pra pra pra pra pra")
+        await asyncio.sleep(0.4)
+        await message.reply_text("POOOOOWW")
+
+    async def bloco2():
+        await message.reply_text("pra")
+        await asyncio.sleep(0.2)
+        await message.reply_text("pra pra pra")
+        await asyncio.sleep(0.1)
+        await message.reply_text("pra")
+        await asyncio.sleep(0.1)
+        await message.reply_text("...")
+        await asyncio.sleep(0.6)
+        await message.reply_text("POOOWW")
+
+    async def bloco3():
+        await message.reply_text("tra tra tra")
+        await asyncio.sleep(0.3)
+        await message.reply_text("tra tra")
+        await asyncio.sleep(0.15)
+        await message.reply_text("POW POW POW")
+        await asyncio.sleep(0.5)
+        await message.reply_text("BOOOOM")
+
+    async def bloco4():
+        await message.reply_text("pra")
+        await asyncio.sleep(0.2)
+        await message.reply_text("pra pra pra pra pra")
+        await asyncio.sleep(0.1)
+        await message.reply_text("pra pra pra")
+        await asyncio.sleep(0.1)
+        await message.reply_text("...")
+        await asyncio.sleep(0.6)
+        await message.reply_text("tssss...")
+
+    async def bloco5():
+        await message.reply_text("pra")
+        await asyncio.sleep(0.2)
+        await message.reply_text("pra pra...")
+        await asyncio.sleep(0.6)
+        await message.reply_text("pra pra pra")
+        await asyncio.sleep(0.1)
+        await message.reply_text("...")
+        await asyncio.sleep(1.2)
+        await message.reply_text("vai toma no cu")
+
+    async def bloco6():
+        await message.reply_text("pra")
+        await asyncio.sleep(0.2)
+        await message.reply_text("pra pra")
+        await asyncio.sleep(0.1)
+        await message.reply_text("pra pra pra")
+        await asyncio.sleep(0.2)
+        await message.reply_text("pra pra pra pra pra pra pra...")
+        await asyncio.sleep(0.1)
+        await message.reply_text("...")
+        await asyncio.sleep(1.2)
+        await message.reply_text("☭ revolução do proletariado já! ☭")
+
+    async def bloco7():
+        await message.reply_text("pra")
+        await asyncio.sleep(0.2)
+        await message.reply_text("psra para")
+        await asyncio.sleep(0.1)
+        await message.reply_text("pra pra pra pra pra ...")
+        await asyncio.sleep(1.0)
+        await message.reply_text("...")
+        await asyncio.sleep(1.2)
+        await message.reply_text("Não deita aí não Tio França!!!!!!!")
+        await asyncio.sleep(0.6)
+        await message.reply_text("🐂👨🏻‍🦲💥☠️")
+
+    # Lista de blocos e suas probabilidades
+    blocos = [bloco1, bloco2, bloco3, bloco4, bloco5, bloco6, bloco7]
+    pesos = [25, 25, 25, 10, 5, 5, 5]
+
+    # Escolhe um bloco baseado nos pesos e o executa
+    bloco_escolhido = random.choices(blocos, weights=pesos, k=1)[0]
+    await bloco_escolhido()
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia uma mensagem de boas-vindas quando o comando /start é executado."""
     await update.message.reply_text('Olá! Envie uma mensagem com um link e eu vou corrigi-lo para você.')
@@ -162,10 +278,6 @@ async def get_chat_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     """Envia o ID do chat atual."""
     chat_id = update.message.chat_id
     await update.message.reply_text(f"O ID deste chat é: {chat_id}")
-
-async def acende_placeholder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Placeholder para o comando /acende."""
-    await update.message.reply_text("Comando /acende recebido. Funcionalidade a ser implementada no futuro.")
 
 
 def main() -> None:
@@ -181,7 +293,7 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("myid", get_chat_id))
     application.add_handler(CommandHandler("paywall", comando_paywall))
-    application.add_handler(CommandHandler("acende", acende_placeholder))
+    application.add_handler(CommandHandler("acende", comando_acende))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, processa_mensagem))
 
     logger.info("Bot iniciado e escutando...")
