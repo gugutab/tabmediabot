@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 # --- ID do chat permitido ---
 MEU_CHAT_ID = 476169897 
 
+# --- Constante para o arquivo de broadcast ---
+BROADCAST_FILE_PATH = "/tmp/bot_broadcast_message.txt"
+
 # --- Lista de domínios com paywall ---
 PAYWALL_DOMAINS = {
     'bloomberg.com', 'correio.rac.com.br', 'nsctotal.com.br', 'economist.com', 
@@ -269,6 +272,25 @@ async def comando_acende(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     bloco_escolhido = random.choices(blocos, weights=pesos, k=1)[0]
     await bloco_escolhido()
 
+async def check_broadcast_file(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Verifica se existe uma mensagem para broadcast e a envia."""
+    if os.path.exists(BROADCAST_FILE_PATH):
+        try:
+            with open(BROADCAST_FILE_PATH, 'r', encoding='utf-8') as f:
+                message_text = f.read()
+            
+            if message_text:
+                # Envia a mensagem para o seu chat ID para testes
+                await context.bot.send_message(chat_id=MEU_CHAT_ID, text=message_text)
+                logger.info(f"Mensagem de broadcast enviada para {MEU_CHAT_ID}: {message_text[:30]}...")
+        
+        except Exception as e:
+            logger.error(f"Erro ao processar arquivo de broadcast: {e}")
+        
+        finally:
+            # Apaga o arquivo após processá-lo, mesmo que haja erro
+            os.remove(BROADCAST_FILE_PATH)
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Envia uma mensagem de boas-vindas quando o comando /start é executado."""
@@ -288,6 +310,10 @@ def main() -> None:
         return
 
     application = Application.builder().token(TOKEN).build()
+
+    # --- NOVO: Adiciona a tarefa de verificação do arquivo ---
+    application.job_queue.run_repeating(check_broadcast_file, interval=5, first=10)
+
 
     # Adiciona os handlers (manipuladores)
     application.add_handler(CommandHandler("start", start))
