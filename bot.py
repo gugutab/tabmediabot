@@ -15,8 +15,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- ID do chat permitido ---
-MEU_CHAT_ID = 476169897 
+# --- Whitelist de IDs de chat permitidos ---
+# Adicione quantos IDs de chat (seus ou de grupos) você quiser aqui.
+# Use o comando /myid para descobrir o ID de um chat.
+WHITELIST_CHAT_IDS = {
+    476169897, 
+    # -100123456789, # Exemplo de ID de um grupo
+}
 
 # --- Constante para o arquivo de broadcast ---
 BROADCAST_FILE_PATH = "/tmp/bot_broadcast_message.txt"
@@ -112,7 +117,7 @@ def corrigir_links_automatico(texto_original, entities):
 async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Processa automaticamente as mensagens de texto em busca de links."""
     message = update.message
-    if message.chat_id != MEU_CHAT_ID:
+    if message.chat_id not in WHITELIST_CHAT_IDS:
         return
 
     texto_modificado, links_alterados, contem_paywall = corrigir_links_automatico(message.text, message.entities)
@@ -130,7 +135,9 @@ async def comando_paywall(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     ou com um link na própria mensagem.
     """
     message = update.message
-    # Prioriza a mensagem respondida; se não houver, usa a própria mensagem do comando.
+    if message.chat_id not in WHITELIST_CHAT_IDS:
+        return
+
     target_message = message.reply_to_message or message
 
     if not target_message.text or not target_message.entities:
@@ -141,21 +148,18 @@ async def comando_paywall(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     entities = target_message.entities
     link_modificado_final = None
 
-    # Procura pelo primeiro link na mensagem alvo
     for entity in entities:
         if entity.type == 'url':
             link_original = texto_original[entity.offset : entity.offset + entity.length]
             
-            # Gera o link do removepaywall para QUALQUER URL encontrada
             url_removepaywall = f"https://www.removepaywall.com/search?url={quote(link_original)}"
             texto_do_link = "🖕Vá se foder, paywall!🖕"
             link_modificado_final = f'<a href="{url_removepaywall}">{texto_do_link}</a>'
             
-            break # Processa apenas o primeiro link encontrado
+            break 
 
     if link_modificado_final:
         logger.info(f"Link(s) alterado(s) manualmente via /paywall por {message.from_user.name}")
-        # Responde à mensagem que continha o link original, mas APENAS com o novo hiperlink
         await target_message.reply_text(
             link_modificado_final, 
             parse_mode=ParseMode.HTML, 
@@ -169,22 +173,20 @@ async def comando_acende(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     """Implementa a lógica do 'rojão' com cooldown e variações aleatórias."""
     global _last_acende_time, _acende_cooldown
     message = update.message
+    if message.chat_id not in WHITELIST_CHAT_IDS:
+        return
 
-    # Checa se é domingo (domingo = 6 na biblioteca datetime do Python)
     if datetime.now().weekday() == 6:
         await message.reply_text("Abaixo a escala 6x1!!!")
         return
 
-    # Checa o cooldown
     time_since_last_use = datetime.utcnow() - _last_acende_time
     if time_since_last_use < _acende_cooldown:
         await message.reply_text("Calma porra!")
         return
 
-    # Atualiza o tempo do último uso
     _last_acende_time = datetime.utcnow()
 
-    # Define as sequências de mensagens (blocos)
     async def bloco1():
         await message.reply_text("pra pra")
         await asyncio.sleep(0.2)
@@ -264,31 +266,34 @@ async def comando_acende(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await asyncio.sleep(0.6)
         await message.reply_text("🐂👨🏻‍🦲💥☠️")
 
-    # Lista de blocos e suas probabilidades
     blocos = [bloco1, bloco2, bloco3, bloco4, bloco5, bloco6, bloco7]
     pesos = [25, 25, 25, 10, 5, 5, 5]
 
-    # Escolhe um bloco baseado nos pesos e o executa
     bloco_escolhido = random.choices(blocos, weights=pesos, k=1)[0]
     await bloco_escolhido()
 
 async def check_broadcast_file(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Verifica se existe uma mensagem para broadcast e a envia."""
+    """Verifica se existe uma mensagem para broadcast e a envia para todos os chats da whitelist."""
     if os.path.exists(BROADCAST_FILE_PATH):
         try:
             with open(BROADCAST_FILE_PATH, 'r', encoding='utf-8') as f:
                 message_text = f.read()
             
             if message_text:
-                # Envia a mensagem para o seu chat ID para testes
-                await context.bot.send_message(chat_id=MEU_CHAT_ID, text=message_text)
-                logger.info(f"Mensagem de broadcast enviada para {MEU_CHAT_ID}: {message_text[:30]}...")
+                logger.info(f"Iniciando broadcast da mensagem: {message_text[:30]}...")
+                # Envia a mensagem para todos os chats da whitelist
+                for chat_id in WHITELIST_CHAT_IDS:
+                    try:
+                        await context.bot.send_message(chat_id=chat_id, text=message_text)
+                        logger.info(f"Broadcast enviado para {chat_id}")
+                        await asyncio.sleep(0.1) # Pequeno delay para evitar rate limit
+                    except Exception as e:
+                        logger.error(f"Falha ao enviar broadcast para {chat_id}: {e}")
         
         except Exception as e:
             logger.error(f"Erro ao processar arquivo de broadcast: {e}")
         
         finally:
-            # Apaga o arquivo após processá-lo, mesmo que haja erro
             os.remove(BROADCAST_FILE_PATH)
 
 
@@ -311,11 +316,8 @@ def main() -> None:
 
     application = Application.builder().token(TOKEN).build()
 
-    # --- NOVO: Adiciona a tarefa de verificação do arquivo ---
     application.job_queue.run_repeating(check_broadcast_file, interval=5, first=10)
 
-
-    # Adiciona os handlers (manipuladores)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("myid", get_chat_id))
     application.add_handler(CommandHandler("paywall", comando_paywall))
