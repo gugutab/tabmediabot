@@ -42,9 +42,9 @@ REGRAS_SOCIAL = {
 
 # --- FUNÇÃO CENTRAL DE LÓGICA ---
 
-def corrigir_links(texto_original, entities):
+def corrigir_links_automatico(texto_original, entities):
     """
-    Função central que processa uma lista de links e retorna o texto modificado.
+    Função que processa links automaticamente baseado nas regras predefinidas.
     Retorna uma tupla: (texto_modificado, links_alterados, contem_paywall)
     """
     if not texto_original or not entities:
@@ -62,7 +62,7 @@ def corrigir_links(texto_original, entities):
                 parsed_link = urlparse(link_original)
                 domain_original = parsed_link.netloc.replace('www.', '')
 
-                # 1. Checa Paywall
+                # 1. Checa se o domínio termina com um dos domínios da lista de PAYWALL
                 paywall_match_found = False
                 for paywall_domain in PAYWALL_DOMAINS:
                     if domain_original.endswith(paywall_domain):
@@ -75,7 +75,7 @@ def corrigir_links(texto_original, entities):
                         links_alterados = True
                         paywall_match_found = True
                         break
-                
+
                 if paywall_match_found:
                     continue
 
@@ -104,7 +104,7 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if message.chat_id != MEU_CHAT_ID:
         return
 
-    texto_modificado, links_alterados, contem_paywall = corrigir_links(message.text, message.entities)
+    texto_modificado, links_alterados, contem_paywall = corrigir_links_automatico(message.text, message.entities)
 
     if links_alterados:
         logger.info(f"Link(s) alterado(s) automaticamente para o usuário {message.from_user.name}")
@@ -113,31 +113,48 @@ async def processa_mensagem(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         else:
             await message.reply_text(texto_modificado, disable_web_page_preview=False)
 
-async def processa_paywall_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Processa o comando /paywall respondido a uma mensagem."""
+async def comando_paywall(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Processa o comando /paywall, funcionando em resposta a uma mensagem
+    ou com um link na própria mensagem.
+    """
     message = update.message
-    original_message = message.reply_to_message
+    # Prioriza a mensagem respondida; se não houver, usa a própria mensagem do comando.
+    target_message = message.reply_to_message or message
 
-    if not original_message:
-        return # Comando não foi usado em resposta a uma mensagem
-
-    if not original_message.text or not original_message.entities:
-        await message.reply_text("Que foi, porra?!")
+    if not target_message.text or not target_message.entities:
+        await message.reply_text("Cade o link, porra!?")
         return
 
-    texto_modificado, links_alterados, contem_paywall = corrigir_links(original_message.text, original_message.entities)
+    texto_original = target_message.text
+    entities = target_message.entities
+    texto_modificado = texto_original
+    link_encontrado = False
 
-    if links_alterados:
-        logger.info(f"Link(s) alterado(s) via /paywall por {message.from_user.name}")
-        # Responde à mensagem original para manter o contexto
-        if contem_paywall:
-            await original_message.reply_text(texto_modificado, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-        else:
-            # Se não for paywall, apenas envia o link modificado (caso raro)
-            await original_message.reply_text(texto_modificado, disable_web_page_preview=False)
+    # Procura pelo primeiro link na mensagem alvo
+    for entity in entities:
+        if entity.type == 'url':
+            link_original = texto_original[entity.offset : entity.offset + entity.length]
+            
+            # Gera o link do removepaywall para QUALQUER URL encontrada
+            url_removepaywall = f"https://www.removepaywall.com/search?url={quote(link_original)}"
+            texto_do_link = "🖕Vá se foder, paywall!🖕"
+            link_modificado = f'<a href="{url_removepaywall}">{texto_do_link}</a>'
+            
+            texto_modificado = texto_modificado.replace(link_original, link_modificado)
+            link_encontrado = True
+            break # Processa apenas o primeiro link encontrado
+
+    if link_encontrado:
+        logger.info(f"Link(s) alterado(s) manualmente via /paywall por {message.from_user.name}")
+        # Responde à mensagem que continha o link original
+        await target_message.reply_text(
+            texto_modificado, 
+            parse_mode=ParseMode.HTML, 
+            disable_web_page_preview=True
+        )
     else:
-        # Se nenhum link foi alterado, informa o usuário
-        await message.reply_text("Nenhum link de paywall conhecido encontrado na mensagem original.")
+        await message.reply_text("Cade o link, porra!?")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -166,7 +183,7 @@ def main() -> None:
     # Adiciona os handlers (manipuladores)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("myid", get_chat_id))
-    application.add_handler(CommandHandler("paywall", processa_paywall_reply))
+    application.add_handler(CommandHandler("paywall", comando_paywall))
     application.add_handler(CommandHandler("acende", acende_placeholder))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, processa_mensagem))
 
