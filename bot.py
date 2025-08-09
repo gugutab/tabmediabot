@@ -128,8 +128,7 @@ async def comando_paywall(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     texto_original = target_message.text
     entities = target_message.entities
-    texto_modificado = texto_original
-    link_encontrado = False
+    link_modificado_final = None
 
     # Procura pelo primeiro link na mensagem alvo
     for entity in entities:
@@ -139,17 +138,15 @@ async def comando_paywall(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             # Gera o link do removepaywall para QUALQUER URL encontrada
             url_removepaywall = f"https://www.removepaywall.com/search?url={quote(link_original)}"
             texto_do_link = "🖕Vá se foder, paywall!🖕"
-            link_modificado = f'<a href="{url_removepaywall}">{texto_do_link}</a>'
+            link_modificado_final = f'<a href="{url_removepaywall}">{texto_do_link}</a>'
             
-            texto_modificado = texto_modificado.replace(link_original, link_modificado)
-            link_encontrado = True
             break # Processa apenas o primeiro link encontrado
 
-    if link_encontrado:
+    if link_modificado_final:
         logger.info(f"Link(s) alterado(s) manualmente via /paywall por {message.from_user.name}")
-        # Responde à mensagem que continha o link original
+        # Responde à mensagem que continha o link original, mas APENAS com o novo hiperlink
         await target_message.reply_text(
-            texto_modificado, 
+            link_modificado_final, 
             parse_mode=ParseMode.HTML, 
             disable_web_page_preview=True
         )
